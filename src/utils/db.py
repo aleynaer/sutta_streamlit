@@ -4,11 +4,11 @@ import json
 import docx
 import streamlit as st
 
-private_data_path = st.secrets["private_data_path"]
+data_path = st.secrets["data_path"]
 
 
 def init_db():
-    db_path = os.path.join(private_data_path, "instructions.db")  # Veritabanı özel dizinde
+    db_path = os.path.join(data_path, "instructions.db")  # Veritabanı özel dizinde
     #db_path = "src/data/instructions.db"
     os.makedirs(os.path.dirname(db_path), exist_ok=True)
     
@@ -29,7 +29,7 @@ def init_db():
     if c.fetchone()[0] == 0:
         try:
             # Read default instruction from DOCX
-            doc_path = os.path.join(private_data_path, "1- Talimat Dosyası.docx")
+            doc_path = os.path.join(data_path, "1- Talimat Dosyası.docx")
             doc = docx.Document(doc_path)
             talimat = '\n'.join([para.text for para in doc.paragraphs])
             c.execute("INSERT INTO instructions (title, content) VALUES (?, ?)", 
@@ -52,7 +52,7 @@ def init_db():
     if c.fetchone()[0] == 0:
         try:
             # Read default style guide from DOCX
-            doc_path = os.path.join(private_data_path, "2-Cem Şen Çeviri Üslubu Rehberi.docx")
+            doc_path = os.path.join(data_path, "2-Cem Şen Çeviri Üslubu Rehberi.docx")
             doc = docx.Document(doc_path)
             uslup = '\n'.join([para.text for para in doc.paragraphs])
             c.execute("INSERT INTO style_guides (title, content) VALUES (?, ?)", 
@@ -74,7 +74,7 @@ def init_db():
     c.execute("SELECT COUNT(*) FROM dictionary")
     if c.fetchone()[0] == 0:
         try:
-            json_path = os.path.join(private_data_path, "sozluk.json")
+            json_path = os.path.join(data_path, "sozluk.json")
             with open(json_path, "r", encoding="utf-8") as f:
                 dictionary_data = json.load(f)
                 entries = []
@@ -128,7 +128,7 @@ def init_db():
     if c.fetchone()[0] == 0:
         try:
             # Read example translations from ceviri_ornek.txt
-            txt_path = os.path.join(private_data_path, "ceviri_ornek.txt")
+            txt_path = os.path.join(data_path, "ceviri_ornek.txt")
             with open(txt_path, "r", encoding="utf-8") as f:
                 lines = f.readlines()
                 entries = []

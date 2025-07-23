@@ -52,4 +52,5 @@ temp_*.docx
 
 # Project-specific folders
 data/
-
+data/ceviri_ornek.txt
+data/sozluk.json

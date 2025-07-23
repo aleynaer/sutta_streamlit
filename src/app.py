@@ -38,13 +38,18 @@ def get_default_style_guide():
     style_guides = get_all_style_guides()
     return style_guides[0][2] if style_guides else ""
 
-# Load example translation
-with open("src/data/ceviri_ornek.txt", "r", encoding="utf-8") as f:
-    example_text = f.read()
+# Load example translation and dictionary content
+data_folder = st.secrets["data_path"]
+ceviri_ornek_path = os.path.join(data_folder, "ceviri_ornek.txt")
+sozluk_path = os.path.join(data_folder, "sozluk.json")
 
-# Load original Pali text
-with open("src/data/Devadahasutta.txt", "r", encoding="utf-8") as f:
-    sutta_text = f.read()
+# Load example translation text
+with open(ceviri_ornek_path, "r") as ceviri_file:
+    ceviri_content = ceviri_file.read()
+# Load dictionary content
+with open(sozluk_path, "r") as sozluk_file:
+    sozluk_content = sozluk_file.read()
+
 
 # Initialize the translation model
 llm = ChatOpenAI(
