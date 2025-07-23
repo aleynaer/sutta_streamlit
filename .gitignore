@@ -51,6 +51,5 @@ temp_*.docx
 .Trashes
 
 # Project-specific folders
-data/
-data/ceviri_ornek.txt
-data/sozluk.json
+*.txt
+*.json
