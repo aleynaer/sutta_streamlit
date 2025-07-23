@@ -49,3 +49,7 @@ temp_*.docx
 ._*
 .Spotlight-V100
 .Trashes
+
+# Project-specific folders
+data/
+

@@ -2,9 +2,14 @@ import sqlite3
 import os
 import json
 import docx
+import streamlit as st
+
+private_data_path = st.secrets["private_data_path"]
+
 
 def init_db():
-    db_path = "src/data/instructions.db"
+    db_path = os.path.join(private_data_path, "instructions.db")  # Veritabanı özel dizinde
+    #db_path = "src/data/instructions.db"
     os.makedirs(os.path.dirname(db_path), exist_ok=True)
     
     conn = sqlite3.connect(db_path)
@@ -24,7 +29,8 @@ def init_db():
     if c.fetchone()[0] == 0:
         try:
             # Read default instruction from DOCX
-            doc = docx.Document("src/data/1- Talimat Dosyası.docx")
+            doc_path = os.path.join(private_data_path, "1- Talimat Dosyası.docx")
+            doc = docx.Document(doc_path)
             talimat = '\n'.join([para.text for para in doc.paragraphs])
             c.execute("INSERT INTO instructions (title, content) VALUES (?, ?)", 
                      ("Default Instructions", talimat))
@@ -46,7 +52,8 @@ def init_db():
     if c.fetchone()[0] == 0:
         try:
             # Read default style guide from DOCX
-            doc = docx.Document("src/data/2-Cem Şen Çeviri Üslubu Rehberi.docx")
+            doc_path = os.path.join(private_data_path, "2-Cem Şen Çeviri Üslubu Rehberi.docx")
+            doc = docx.Document(doc_path)
             uslup = '\n'.join([para.text for para in doc.paragraphs])
             c.execute("INSERT INTO style_guides (title, content) VALUES (?, ?)", 
                      ("Default Style Guide", uslup))
@@ -67,7 +74,8 @@ def init_db():
     c.execute("SELECT COUNT(*) FROM dictionary")
     if c.fetchone()[0] == 0:
         try:
-            with open("src/data/sozluk.json", "r", encoding="utf-8") as f:
+            json_path = os.path.join(private_data_path, "sozluk.json")
+            with open(json_path, "r", encoding="utf-8") as f:
                 dictionary_data = json.load(f)
                 entries = []
                 
@@ -114,6 +122,33 @@ def init_db():
          is_selected BOOLEAN DEFAULT FALSE,
          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)
     ''')
+
+    # Initialize example translations if empty
+    c.execute("SELECT COUNT(*) FROM example_translations")
+    if c.fetchone()[0] == 0:
+        try:
+            # Read example translations from ceviri_ornek.txt
+            txt_path = os.path.join(private_data_path, "ceviri_ornek.txt")
+            with open(txt_path, "r", encoding="utf-8") as f:
+                lines = f.readlines()
+                entries = []
+                
+                # Each entry is assumed to be in the format: title|original_text|translated_text
+                for line in lines:
+                    parts = line.strip().split('|')
+                    if len(parts) == 3:
+                        title, original_text, translated_text = parts
+                        entries.append((title, original_text, translated_text))
+                
+                # Insert all entries in a single transaction
+                if entries:
+                    c.executemany(
+                        "INSERT INTO example_translations (title, original_text, translated_text) VALUES (?, ?, ?)", 
+                        entries
+                    )
+                    print(f"Added {len(entries)} example translations")
+        except Exception as e:
+            print(f"Error loading example translations: {str(e)}")
 
     # Create user translations table
     c.execute('''
