@@ -257,7 +257,7 @@ elif options == "Dictionary":
 
 elif options == "Example Translations":
     st.header("Example Translations")
-    st.write(example_text)
+    #st.write(example_text)
     # Add new example section
     st.subheader("Add New Example Translation")
     new_title = st.text_input("Title", key="example_title")
@@ -383,7 +383,7 @@ elif options == "Translate":
             ])
             examples_prompt = f"Çeviri tarzını benimsemek için aşağıdaki örnek çevirileri incele:\n{examples_text}"
         else:
-            examples_prompt = f"Çeviri tarzını benimsemek için aşağıdaki örnek çeviriyi incele:\n{example_text}"
+            examples_prompt = f"Çeviri tarzını benimsemek için aşağıdaki örnek çeviriyi incele:\n{ceviri_content}"
 
         system_prompt = f"""
         {current_instruction}
