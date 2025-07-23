@@ -1,0 +1,16 @@
+{
+    "dictionary": {
+        "pali_term_1": {
+            "turkish_translation": "Türkçe Çeviri 1",
+            "explanation": "Açıklama 1"
+        },
+        "pali_term_2": {
+            "turkish_translation": "Türkçe Çeviri 2",
+            "explanation": "Açıklama 2"
+        },
+        "pali_term_3": {
+            "turkish_translation": "Türkçe Çeviri 3",
+            "explanation": "Açıklama 3"
+        }
+    }
+}
