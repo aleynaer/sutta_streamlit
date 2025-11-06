@@ -5,6 +5,8 @@ import streamlit as st
 import docx
 import json
 import pandas as pd
+from openai import OpenAI
+
 # Update imports
 from utils.db import (init_db, get_all_instructions, save_instruction, update_instruction,
                      get_all_style_guides, save_style_guide, update_style_guide,
@@ -18,6 +20,9 @@ init_db()
 
 # Set up the OpenAI API key from Streamlit secrets
 os.environ["OPENAI_API_KEY"] = st.secrets["openai_api_key"]
+
+# Initialize OpenAI client
+client = OpenAI()
 
 # Function to read text from a DOCX file
 def getText(filename):
@@ -53,8 +58,9 @@ with open(sozluk_path, "r") as sozluk_file:
 
 # Initialize the translation model
 llm = ChatOpenAI(
-    model="gpt-4.1-mini",
-    temperature=0.7,
+    #model="gpt-4.1-mini",
+    model="gpt-5-mini",
+    #temperature=0.7,
     max_tokens=10000,
     openai_api_key=os.getenv("OPENAI_API_KEY"),
 )
@@ -67,6 +73,17 @@ def translate_text(llm, text, system_prompt):
     ]
     response = llm.invoke(messages)
     return response.content, response.response_metadata.get("token_usage", {}).get("completion_tokens", 0), response.response_metadata.get("token_usage", {}).get("prompt_tokens", 0)
+
+
+def translate_text_openai(client, text, system_prompt):
+    result = client.responses.create(
+        model="gpt-5-mini",
+        input=system_prompt + "\n\n" + text,
+        reasoning={"effort": "medium"},
+        text={"verbosity": "medium"},
+    )
+    print(result.output_text)
+    return result.output_text, 0, 0  # Placeholder for token counts
 
 # Streamlit UI setup
 st.title("Pali to Turkish Translation App")
@@ -88,7 +105,7 @@ if options == "Instructions":
     if st.button("Save New Instruction"):
         save_instruction(new_title, new_content)
         st.success("New instruction saved!")
-        st.experimental_rerun()
+        st.rerun()
     
     # Show existing instructions
     st.subheader("Existing Instructions")
@@ -108,7 +125,7 @@ if options == "Instructions":
             if st.button("Update Instruction"):
                 update_instruction(selected_instruction[0], edit_title, edit_content)
                 st.success("Instruction updated!")
-                st.experimental_rerun()
+                st.rerun()
             
             # Use this instruction for translation
             if st.button("Use This Instruction"):
@@ -126,7 +143,7 @@ elif options == "Style Guide":
     if st.button("Save New Style Guide"):
         save_style_guide(new_title, new_content)
         st.success("New style guide saved!")
-        st.experimental_rerun()
+        st.rerun()
     
     # Show existing style guides
     st.subheader("Existing Style Guides")
@@ -147,7 +164,7 @@ elif options == "Style Guide":
             if st.button("Update Style Guide"):
                 update_style_guide(selected_style_guide[0], edit_title, edit_content)
                 st.success("Style guide updated!")
-                st.experimental_rerun()
+                st.rerun()
             
             # Use this style guide for translation
             if st.button("Use This Style Guide"):
@@ -173,7 +190,7 @@ elif options == "Dictionary":
         if new_pali and new_turkish:
             add_dictionary_entry(new_pali, new_turkish, new_notes)
             st.success("Entry added successfully!")
-            st.experimental_rerun()
+            st.rerun()
         else:
             st.error("Pali term and Turkish translation are required!")
     
@@ -248,7 +265,7 @@ elif options == "Dictionary":
                             row["Notes"] if not pd.isna(row["Notes"]) else ""
                         )
                 st.success("Dictionary updated successfully!")
-                st.experimental_rerun()
+                st.rerun()
             except Exception as e:
                 st.error(f"Error updating dictionary: {str(e)}")
     else:
@@ -271,7 +288,7 @@ elif options == "Example Translations":
         if new_title and new_original and new_translation:
             save_example(new_title, new_original, new_translation)
             st.success("Example translation added successfully!")
-            st.experimental_rerun()
+            st.rerun()
         else:
             st.error("All fields are required!")
     
@@ -299,7 +316,7 @@ elif options == "Example Translations":
                     # Update selection
                     if is_selected != example[4]:
                         update_example_selection(example[0], is_selected)
-                        st.experimental_rerun()
+                        st.rerun()
                     
                     # Edit and delete buttons
                     if st.button("Update", key=f"update_{example[0]}"):
@@ -310,12 +327,12 @@ elif options == "Example Translations":
                             st.session_state[f"trans_{example[0]}"]
                         )
                         st.success("Example updated!")
-                        st.experimental_rerun()
+                        st.rerun()
                     
                     if st.button("Delete", key=f"delete_{example[0]}"):
                         delete_example(example[0])
                         st.success("Example deleted!")
-                        st.experimental_rerun()
+                        st.rerun()
     else:
         st.info("No example translations added yet.")
 
@@ -401,7 +418,8 @@ elif options == "Translate":
         Orjinal Metin:
         """
         
-        translated_text, completion_tokens, prompt_tokens = translate_text(llm, input_text, system_prompt)
+        #translated_text, completion_tokens, prompt_tokens = translate_text(llm, input_text, system_prompt)
+        translated_text, completion_tokens, prompt_tokens = translate_text_openai(client, input_text, system_prompt)
         st.session_state.current_translation = translated_text
         st.session_state.original_text = input_text
     

@@ -1,328 +1,301 @@
-import sqlite3
 import os
 import json
 import docx
 import streamlit as st
+from datetime import datetime
+import firebase_admin
+from firebase_admin import credentials, firestore
 
+# Initialize Firebase with your credentials
+try:
+    if not firebase_admin._apps:
+        cred = credentials.Certificate({
+            "type": st.secrets["firebase_credentials"]["type"],
+            "project_id": st.secrets["firebase_credentials"]["project_id"],
+            "private_key_id": st.secrets["firebase_credentials"]["private_key_id"],
+            "private_key": st.secrets["firebase_credentials"]["private_key"],
+            "client_email": st.secrets["firebase_credentials"]["client_email"],
+            "client_id": st.secrets["firebase_credentials"]["client_id"],
+            "auth_uri": st.secrets["firebase_credentials"]["auth_uri"],
+            "token_uri": st.secrets["firebase_credentials"]["token_uri"],
+            "auth_provider_x509_cert_url": st.secrets["firebase_credentials"]["auth_provider_x509_cert_url"],
+            "client_x509_cert_url": st.secrets["firebase_credentials"]["client_x509_cert_url"],
+            "universe_domain": st.secrets["firebase_credentials"]["universe_domain"]
+        })
+        firebase_admin.initialize_app(cred)
+
+    db = firestore.client()
+except Exception as e:
+    st.error(f"""
+        Failed to initialize Firebase: {str(e)}
+        
+        Please make sure:
+        1. Firebase credentials are correct in .streamlit/secrets.toml
+        2. Firestore API is enabled in Firebase Console
+        3. Firebase project is properly set up
+    """)
 data_path = st.secrets["data_path"]
 
 
 def init_db():
-    db_path = os.path.join(data_path, "instructions.db")  # Veritabanı özel dizinde
-    #db_path = "src/data/instructions.db"
-    os.makedirs(os.path.dirname(db_path), exist_ok=True)
+    collections = ['instructions', 'style_guides', 'dictionary', 'example_translations', 'user_translations']
     
-    conn = sqlite3.connect(db_path)
-    c = conn.cursor()
-    
-    # Create instructions table
-    c.execute('''
-        CREATE TABLE IF NOT EXISTS instructions
-        (id INTEGER PRIMARY KEY AUTOINCREMENT,
-         title TEXT NOT NULL,
-         content TEXT NOT NULL,
-         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)
-    ''')
-
-    # Initialize instructions if empty
-    c.execute("SELECT COUNT(*) FROM instructions")
-    if c.fetchone()[0] == 0:
-        try:
-            # Read default instruction from DOCX
-            doc_path = os.path.join(data_path, "1- Talimat Dosyası.docx")
-            doc = docx.Document(doc_path)
-            talimat = '\n'.join([para.text for para in doc.paragraphs])
-            c.execute("INSERT INTO instructions (title, content) VALUES (?, ?)", 
-                     ("Default Instructions", talimat))
-        except Exception as e:
-            print(f"Error loading instructions: {str(e)}")
-    
-
-    # Create style guides table
-    c.execute('''
-        CREATE TABLE IF NOT EXISTS style_guides
-        (id INTEGER PRIMARY KEY AUTOINCREMENT,
-         title TEXT NOT NULL,
-         content TEXT NOT NULL,
-         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)
-    ''')
-
-    # Initialize style guide if empty
-    c.execute("SELECT COUNT(*) FROM style_guides")
-    if c.fetchone()[0] == 0:
-        try:
-            # Read default style guide from DOCX
-            doc_path = os.path.join(data_path, "2-Cem Şen Çeviri Üslubu Rehberi.docx")
-            doc = docx.Document(doc_path)
-            uslup = '\n'.join([para.text for para in doc.paragraphs])
-            c.execute("INSERT INTO style_guides (title, content) VALUES (?, ?)", 
-                     ("Default Style Guide", uslup))
-        except Exception as e:
-            print(f"Error loading style guide: {str(e)}")
-
-    # Create dictionary table
-    c.execute('''
-        CREATE TABLE IF NOT EXISTS dictionary
-        (id INTEGER PRIMARY KEY AUTOINCREMENT,
-         pali TEXT NOT NULL,
-         turkish TEXT NOT NULL,
-         notes TEXT,
-         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)
-    ''')
-    
-    # Initialize dictionary from JSON if table is empty
-    c.execute("SELECT COUNT(*) FROM dictionary")
-    if c.fetchone()[0] == 0:
-        try:
-            json_path = os.path.join(data_path, "sozluk.json")
-            with open(json_path, "r", encoding="utf-8") as f:
-                dictionary_data = json.load(f)
-                entries = []
-                
-                # Handle both list and dictionary formats
-                if isinstance(dictionary_data, list):
-                    # If data is a list of entries
-                    for item in dictionary_data:
-                        if isinstance(item, dict):
-                            pali = item.get('pali', '')
-                            turkish = item.get('turkish_translation', '')
-                            notes = item.get('explanation', '')
-                            if pali and turkish:
-                                entries.append((pali, turkish, notes))
-                else:
-                    # If data is a dictionary
-                    for pali_term, translations in dictionary_data.items():
-                        if isinstance(translations, dict):
-                            turkish = translations.get('turkish_translation', '')
-                            notes = translations.get('explanation', '')
-                            entries.append((pali_term, turkish, notes))
+    # Check if collections exist and initialize default data if needed
+    for collection in collections:
+        coll_ref = db.collection(collection)
+        docs = coll_ref.limit(1).stream()
+        if not list(docs):
+            if collection == 'instructions':
+                try:
+                    # Read default instruction from DOCX
+                    doc_path = os.path.join(data_path, "1- Talimat Dosyası.docx")
+                    doc = docx.Document(doc_path)
+                    talimat = '\n'.join([para.text for para in doc.paragraphs])
+                    coll_ref.add({
+                        'title': "Default Instructions",
+                        'content': talimat,
+                        'created_at': datetime.now()
+                    })
+                except Exception as e:
+                    print(f"Error loading instructions: {str(e)}")
+                    
+            elif collection == 'style_guides':
+                try:
+                    # Read default style guide from DOCX
+                    doc_path = os.path.join(data_path, "2-Cem Şen Çeviri Üslubu Rehberi.docx")
+                    doc = docx.Document(doc_path)
+                    uslup = '\n'.join([para.text for para in doc.paragraphs])
+                    coll_ref.add({
+                        'title': "Default Style Guide",
+                        'content': uslup,
+                        'created_at': datetime.now()
+                    })
+                except Exception as e:
+                    print(f"Error loading style guide: {str(e)}")
+                    
+            elif collection == 'dictionary':
+                try:
+                    json_path = os.path.join(data_path, "sozluk.json")
+                    with open(json_path, "r", encoding="utf-8") as f:
+                        dictionary_data = json.load(f)
+                        
+                        if isinstance(dictionary_data, list):
+                            for item in dictionary_data:
+                                if isinstance(item, dict):
+                                    pali = item.get('pali', '')
+                                    turkish = item.get('turkish_translation', '')
+                                    notes = item.get('explanation', '')
+                                    if pali and turkish:
+                                        coll_ref.add({
+                                            'pali': pali,
+                                            'turkish': turkish,
+                                            'notes': notes,
+                                            'created_at': datetime.now()
+                                        })
                         else:
-                            # Handle simple key-value pairs
-                            entries.append((pali_term, str(translations), ''))
-                
-                # Insert all entries in a single transaction
-                if entries:
-                    c.executemany(
-                        "INSERT INTO dictionary (pali, turkish, notes) VALUES (?, ?, ?)", 
-                        entries
-                    )
-                    print(f"Added {len(entries)} dictionary entries")
-                
-        except Exception as e:
-            print(f"Error loading dictionary: {str(e)}")
-            raise
-    
-    # Create example translations table
-    c.execute('''
-        CREATE TABLE IF NOT EXISTS example_translations
-        (id INTEGER PRIMARY KEY AUTOINCREMENT,
-         title TEXT NOT NULL,
-         original_text TEXT NOT NULL,
-         translated_text TEXT NOT NULL,
-         is_selected BOOLEAN DEFAULT FALSE,
-         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)
-    ''')
-
-    # Initialize example translations if empty
-    c.execute("SELECT COUNT(*) FROM example_translations")
-    if c.fetchone()[0] == 0:
-        try:
-            # Read example translations from ceviri_ornek.txt
-            txt_path = os.path.join(data_path, "ceviri_ornek.txt")
-            with open(txt_path, "r", encoding="utf-8") as f:
-                lines = f.readlines()
-                entries = []
-                
-                # Each entry is assumed to be in the format: title|original_text|translated_text
-                for line in lines:
-                    parts = line.strip().split('|')
-                    if len(parts) == 3:
-                        title, original_text, translated_text = parts
-                        entries.append((title, original_text, translated_text))
-                
-                # Insert all entries in a single transaction
-                if entries:
-                    c.executemany(
-                        "INSERT INTO example_translations (title, original_text, translated_text) VALUES (?, ?, ?)", 
-                        entries
-                    )
-                    print(f"Added {len(entries)} example translations")
-        except Exception as e:
-            print(f"Error loading example translations: {str(e)}")
-
-    # Create user translations table
-    c.execute('''
-        CREATE TABLE IF NOT EXISTS user_translations
-        (id INTEGER PRIMARY KEY AUTOINCREMENT,
-         title TEXT NOT NULL,
-         original_text TEXT NOT NULL,
-         translated_text TEXT NOT NULL,
-         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)
-    ''')
-    
-    conn.commit()
-    conn.close()
+                            for pali_term, translations in dictionary_data.items():
+                                if isinstance(translations, dict):
+                                    turkish = translations.get('turkish_translation', '')
+                                    notes = translations.get('explanation', '')
+                                else:
+                                    turkish = str(translations)
+                                    notes = ''
+                                    
+                                coll_ref.add({
+                                    'pali': pali_term,
+                                    'turkish': turkish,
+                                    'notes': notes,
+                                    'created_at': datetime.now()
+                                })
+                                
+                except Exception as e:
+                    print(f"Error loading dictionary: {str(e)}")
+                    raise
+                    
+            elif collection == 'example_translations':
+                try:
+                    txt_path = os.path.join(data_path, "ceviri_ornek.txt")
+                    with open(txt_path, "r", encoding="utf-8") as f:
+                        lines = f.readlines()
+                        
+                        for line in lines:
+                            parts = line.strip().split('|')
+                            if len(parts) == 3:
+                                title, original_text, translated_text = parts
+                                coll_ref.add({
+                                    'title': title,
+                                    'original_text': original_text,
+                                    'translated_text': translated_text,
+                                    'is_selected': False,
+                                    'created_at': datetime.now()
+                                })
+                except Exception as e:
+                    print(f"Error loading example translations: {str(e)}")
 
 # Get all instructions from the database
 def get_all_instructions():
-    conn = sqlite3.connect("src/data/instructions.db")
-    c = conn.cursor()
-    c.execute("SELECT id, title, content FROM instructions")
-    instructions = c.execute("SELECT * FROM instructions").fetchall()
-    conn.close()
+    instructions = []
+    docs = db.collection('instructions').stream()
+    for doc in docs:
+        data = doc.to_dict()
+        instructions.append((doc.id, data['title'], data['content']))
     return instructions
 
 # Save and update instructions
 def save_instruction(title, content):
-    conn = sqlite3.connect("src/data/instructions.db")
-    c = conn.cursor()
-    c.execute("INSERT INTO instructions (title, content) VALUES (?, ?)", (title, content))
-    conn.commit()
-    conn.close()
+    db.collection('instructions').add({
+        'title': title,
+        'content': content,
+        'created_at': datetime.now()
+    })
 
 def update_instruction(id, title, content):
-    conn = sqlite3.connect("src/data/instructions.db")
-    c = conn.cursor()
-    c.execute("UPDATE instructions SET title = ?, content = ? WHERE id = ?", (title, content, id))
-    conn.commit()
-    conn.close()
+    db.collection('instructions').document(id).update({
+        'title': title,
+        'content': content
+    })
 
 # Get all style guides from the database
 def get_all_style_guides():
-    conn = sqlite3.connect("src/data/instructions.db")
-    c = conn.cursor()
-    style_guides = c.execute("SELECT * FROM style_guides").fetchall()
-    conn.close()
+    style_guides = []
+    docs = db.collection('style_guides').stream()
+    for doc in docs:
+        data = doc.to_dict()
+        style_guides.append((doc.id, data['title'], data['content']))
     return style_guides
 
 # Save and update style guides
 def save_style_guide(title, content):
-    conn = sqlite3.connect("src/data/instructions.db")
-    c = conn.cursor()
-    c.execute("INSERT INTO style_guides (title, content) VALUES (?, ?)", (title, content))
-    conn.commit()
-    conn.close()
+    db.collection('style_guides').add({
+        'title': title,
+        'content': content,
+        'created_at': datetime.now()
+    })
 
 def update_style_guide(id, title, content):
-    conn = sqlite3.connect("src/data/instructions.db")
-    c = conn.cursor()
-    c.execute("UPDATE style_guides SET title = ?, content = ? WHERE id = ?", (title, content, id))
-    conn.commit()
-    conn.close()
+    db.collection('style_guides').document(id).update({
+        'title': title,
+        'content': content
+    })
 
 # Get all dictionary entries
 def get_dictionary():
     """Get all dictionary entries for display"""
-    conn = sqlite3.connect("src/data/instructions.db")
-    c = conn.cursor()
-    dictionary = c.execute("""
-        SELECT id, pali, turkish, notes 
-        FROM dictionary 
-        ORDER BY pali
-    """).fetchall()
-    conn.close()
+    dictionary = []
+    docs = db.collection('dictionary').order_by('pali').stream()
+    for doc in docs:
+        data = doc.to_dict()
+        dictionary.append((doc.id, data['pali'], data['turkish'], data.get('notes', '')))
     return dictionary
 
 # Add, update, and delete dictionary entries
 def add_dictionary_entry(pali, turkish, notes=""):
-    conn = sqlite3.connect("src/data/instructions.db")
-    c = conn.cursor()
-    c.execute("INSERT INTO dictionary (pali, turkish, notes) VALUES (?, ?, ?)", 
-             (pali, turkish, notes))
-    conn.commit()
-    conn.close()
+    db.collection('dictionary').add({
+        'pali': pali,
+        'turkish': turkish,
+        'notes': notes,
+        'created_at': datetime.now()
+    })
 
 def update_dictionary_entry(id, pali, turkish, notes):
-    conn = sqlite3.connect("src/data/instructions.db")
-    c = conn.cursor()
-    c.execute("UPDATE dictionary SET pali = ?, turkish = ?, notes = ? WHERE id = ?", 
-             (pali, turkish, notes, id))
-    conn.commit()
-    conn.close()
+    db.collection('dictionary').document(id).update({
+        'pali': pali,
+        'turkish': turkish,
+        'notes': notes
+    })
 
 def delete_dictionary_entry(id):
-    conn = sqlite3.connect("src/data/instructions.db")
-    c = conn.cursor()
-    c.execute("DELETE FROM dictionary WHERE id = ?", (id,))
-    conn.commit()
-    conn.close()
+    db.collection('dictionary').document(id).delete()
 
 # Get dictionary as a dictionary object
 def get_dictionary_as_dict():
     """Get dictionary as a Python dict for translation use"""
-    conn = sqlite3.connect("src/data/instructions.db")
-    c = conn.cursor()
-    rows = c.execute("SELECT pali, turkish, notes FROM dictionary").fetchall()
-    conn.close()
-    
-    return {row[0]: {
-        "turkish_translation": row[1],
-        "explanation": row[2] if row[2] else ""
-    } for row in rows}
+    dictionary = {}
+    docs = db.collection('dictionary').stream()
+    for doc in docs:
+        data = doc.to_dict()
+        dictionary[data['pali']] = {
+            "turkish_translation": data['turkish'],
+            "explanation": data.get('notes', '')
+        }
+    return dictionary
 
 # Get all example translations
 def get_all_examples():
-    conn = sqlite3.connect("src/data/instructions.db")
-    c = conn.cursor()
-    examples = c.execute("SELECT * FROM example_translations").fetchall()
-    conn.close()
+    examples = []
+    docs = db.collection('example_translations').stream()
+    for doc in docs:
+        data = doc.to_dict()
+        examples.append((
+            doc.id, 
+            data['title'], 
+            data['original_text'], 
+            data['translated_text'], 
+            data['is_selected'],
+            data.get('created_at', datetime.now())
+        ))
     return examples
 
 # Save, update, delete, and select example translations
 def save_example(title, original_text, translated_text):
-    conn = sqlite3.connect("src/data/instructions.db")
-    c = conn.cursor()
-    c.execute("""
-        INSERT INTO example_translations (title, original_text, translated_text) 
-        VALUES (?, ?, ?)""", (title, original_text, translated_text))
-    conn.commit()
-    conn.close()
+    db.collection('example_translations').add({
+        'title': title,
+        'original_text': original_text,
+        'translated_text': translated_text,
+        'is_selected': False,
+        'created_at': datetime.now()
+    })
 
 def update_example(id, title, original_text, translated_text):
-    conn = sqlite3.connect("src/data/instructions.db")
-    c = conn.cursor()
-    c.execute("""
-        UPDATE example_translations 
-        SET title = ?, original_text = ?, translated_text = ? 
-        WHERE id = ?""", (title, original_text, translated_text, id))
-    conn.commit()
-    conn.close()
+    db.collection('example_translations').document(id).update({
+        'title': title,
+        'original_text': original_text,
+        'translated_text': translated_text
+    })
 
 def delete_example(id):
-    conn = sqlite3.connect("src/data/instructions.db")
-    c = conn.cursor()
-    c.execute("DELETE FROM example_translations WHERE id = ?", (id,))
-    conn.commit()
-    conn.close()
+    db.collection('example_translations').document(id).delete()
 
 def update_example_selection(id, is_selected):
-    conn = sqlite3.connect("src/data/instructions.db")
-    c = conn.cursor()
-    c.execute("UPDATE example_translations SET is_selected = ? WHERE id = ?", (is_selected, id))
-    conn.commit()
-    conn.close()
+    db.collection('example_translations').document(id).update({
+        'is_selected': is_selected
+    })
 
 def get_selected_examples():
-    conn = sqlite3.connect("src/data/instructions.db")
-    c = conn.cursor()
-    examples = c.execute("SELECT * FROM example_translations WHERE is_selected = TRUE").fetchall()
-    conn.close()
+    examples = []
+    docs = db.collection('example_translations').where('is_selected', '==', True).stream()
+    for doc in docs:
+        data = doc.to_dict()
+        examples.append((
+            doc.id, 
+            data['title'], 
+            data['original_text'], 
+            data['translated_text'],
+            data['is_selected'],
+            data.get('created_at', datetime.now())
+        ))
     return examples
 
 # Save user translations
 def save_user_translation(title, original_text, translated_text):
-    conn = sqlite3.connect("src/data/instructions.db")
-    c = conn.cursor()
-    c.execute("""
-        INSERT INTO user_translations (title, original_text, translated_text) 
-        VALUES (?, ?, ?)""", (title, original_text, translated_text))
-    conn.commit()
-    conn.close()
+    db.collection('user_translations').add({
+        'title': title,
+        'original_text': original_text,
+        'translated_text': translated_text,
+        'created_at': datetime.now()
+    })
 
 # Get user translations
 def get_user_translations():
-    conn = sqlite3.connect("src/data/instructions.db")
-    c = conn.cursor()
-    translations = c.execute("SELECT * FROM user_translations ORDER BY created_at DESC").fetchall()
-    conn.close()
+    translations = []
+    docs = db.collection('user_translations').order_by('created_at', direction=firestore.Query.DESCENDING).stream()
+    for doc in docs:
+        data = doc.to_dict()
+        translations.append((
+            doc.id,
+            data['title'],
+            data['original_text'],
+            data['translated_text'],
+            data.get('created_at', datetime.now())
+        ))
     return translations

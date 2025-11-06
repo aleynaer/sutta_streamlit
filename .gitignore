@@ -56,3 +56,4 @@ temp_*.docx
 
 # All project files - exclude everything from repo
 test.ipynb
+.ipynb∂
